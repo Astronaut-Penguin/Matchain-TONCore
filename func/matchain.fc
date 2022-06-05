@@ -1,0 +1,82 @@
+;;global variables
+
+global slice owner_address;
+global int owner_public_key;
+global int loaded;
+
+;;loads the stored data to global variables
+() initialize_globals() impure inline_ref {
+  ifnot (null?(loaded)) {
+    return ();
+  }
+  var ds = get_data().begin_parse();
+  ;;load data variables here
+  owner_address = ds~load_msg_addr();
+  owner_public_key = ds~load_uint(256);
+  loaded = true;
+}
+
+
+;;returns Matchain owner address
+slice get_owner() inline method_id {
+  initialize_globals();
+  return owner_address;
+}
+
+;;store data
+() store_data() impure {
+
+  set_data(begin_cell()
+    .store_slice(owner_address)
+    .store_uint(owner_public_key, 256)
+    .end_cell()
+  );
+}
+
+;;internal
+;; Op codes
+;; 0 -
+
+() recv_internal(int msg_value, cell in_msg_cell, slice in_msg) impure {
+  var cs = in_msg_cell.begin_parse();
+  var msg_hash = slice_hash(cs);
+  cs~skip_bits(3);
+  ;; When bounced do nothing
+  var bounced = cs~load_uint(1);
+  if (bounced == 1) {
+    return ();
+  }
+  initialize_globals();
+  ;; Reading player's address
+  slice src_addr_slice = cs~load_msg_addr();
+  var (src_wc, src_addr) = parse_std_addr(src_addr_slice);
+  var op = in_msg~load_in_msg_op();
+}
+
+;;external
+;; Op codes
+;; Op 0 -
+;; Return codes
+;; 402 - Invalid signature
+;; 404 - Unsupported opcode
+() recv_external(slice in_msg) impure {
+  initialize_globals();
+
+  var signature = in_msg~load_bits(512);
+  var hash = slice_hash(in_msg);
+  throw_unless(402, check_signature(hash, signature, owner_public_key));
+  var op = in_msg~load_uint(32);
+  if (op == 4) {
+    var (src_wc, src_addr) = parse_std_addr(in_msg~load_msg_addr());
+  } else {
+    ;; 
+    if (op == 1) {
+    }
+    elseif (op == 2) {
+    }
+    else {
+      throw(404);
+    }
+    store_data();
+  }
+}

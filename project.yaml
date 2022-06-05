@@ -1,0 +1,4 @@
+matchainContract:
+  data: fift/matchain.fif
+  func:
+    - func/matchain.fc
