@@ -3,6 +3,7 @@
 global slice owner_address;
 global int owner_public_key;
 global int loaded;
+global int nextGameId;
 
 ;;loads the stored data to global variables
 () initialize_globals() impure inline_ref {
@@ -13,6 +14,7 @@ global int loaded;
   ;;load data variables here
   owner_address = ds~load_msg_addr();
   owner_public_key = ds~load_uint(256);
+  nextGameId = ds~load_uint(32);
   loaded = true;
 }
 
@@ -23,12 +25,25 @@ slice get_owner() inline method_id {
   return owner_address;
 }
 
+;;list a game
+() list_game(slice in_msg_body, int msg_value, int src_wc, int src_addr, int msg_hash, int is_external, cell metadata, int price) impure {
+    var (owner_wc, owner_addr) = parse_std_addr(owner_address);
+    int amount = in_msg_body~load_coins();
+  ;; Only owner address and wc
+    throw_unless(402, (owner_wc == src_wc) | (owner_addr == src_addr));
+
+    ;;we receive the game title, description, metadata URI for our hub, the address of the owner and the price for sale
+
+    ;;after succesful data parse, we need to increment the id counter for the next listed one
+    nextGameId += 1;
+}
+
 ;;store data
 () store_data() impure {
-
   set_data(begin_cell()
     .store_slice(owner_address)
     .store_uint(owner_public_key, 256)
+    .store_uint(nextGameId, 32)
     .end_cell()
   );
 }
@@ -37,8 +52,8 @@ slice get_owner() inline method_id {
 ;; Op codes
 ;; 0 -
 
-() recv_internal(int msg_value, cell in_msg_cell, slice in_msg) impure {
-  var cs = in_msg_cell.begin_parse();
+() recv_internal(int msg_value, cell in_msg_body_cell, slice in_msg_body) impure {
+  var cs = in_msg_body_cell.begin_parse();
   var msg_hash = slice_hash(cs);
   cs~skip_bits(3);
   ;; When bounced do nothing
@@ -47,10 +62,10 @@ slice get_owner() inline method_id {
     return ();
   }
   initialize_globals();
-  ;; Reading player's address
+  ;; Reading user's address
   slice src_addr_slice = cs~load_msg_addr();
   var (src_wc, src_addr) = parse_std_addr(src_addr_slice);
-  var op = in_msg~load_in_msg_op();
+  var op = in_msg_body~load_in_msg_body_op();
 }
 
 ;;external
@@ -59,16 +74,13 @@ slice get_owner() inline method_id {
 ;; Return codes
 ;; 402 - Invalid signature
 ;; 404 - Unsupported opcode
-() recv_external(slice in_msg) impure {
+() recv_external(slice in_msg_body) impure {
   initialize_globals();
 
-  var signature = in_msg~load_bits(512);
-  var hash = slice_hash(in_msg);
+  var signature = in_msg_body~load_bits(512);
+  var hash = slice_hash(in_msg_body);
   throw_unless(402, check_signature(hash, signature, owner_public_key));
-  var op = in_msg~load_uint(32);
-  if (op == 4) {
-    var (src_wc, src_addr) = parse_std_addr(in_msg~load_msg_addr());
-  } else {
+  var op = in_msg_body~load_uint(32);
     ;; 
     if (op == 1) {
     }
@@ -78,5 +90,4 @@ slice get_owner() inline method_id {
       throw(404);
     }
     store_data();
-  }
 }
