@@ -6,7 +6,7 @@ global int loaded;
 global int nextGameId;
 
 ;;loads the stored data to global variables
-() initialize_globals() impure inline_ref {
+() initialize_globals( int game_id) impure inline_ref {
   ifnot (null?(loaded)) {
     return ();
   }
@@ -16,7 +16,18 @@ global int nextGameId;
   owner_public_key = ds~load_uint(256);
   nextGameId = ds~load_uint(32);
   games = slice_empty?(ds) ? new_dict() : ds~load_dict();
+  game_info = slice_empty?(ds) ? new_dict() : ds~load_dict();
+  game_cell = slice_empty(game_info) ? new_dict() : game_info~load_ref(game_id);
   loaded = true;
+}
+
+(int, slice, int) load_gameCell(cell gameCell) inline {
+  var gc = gameCell.begin_parse();
+  return 
+    (gc~load_coins(), ;; matchain_fee as dividend
+      gc~load_msg_addr(), ;; payout creator address 
+      gc~load_coins() ;; game full price
+     );
 }
 
 
@@ -26,6 +37,28 @@ slice get_owner() inline method_id {
   return owner_address;
 }
 
+() buy(int my_balance, int msg_value, int game_id) impure {
+  var (matchain_fee, payout_address, full_price) = load_gameCell(game_cell);
+  throw_unless(450, msg_value >= full_price + min_gas_amount());
+
+  var owner_msg = begin_cell()
+           .store_uint(0x10, 6) ;; nobounce
+           .store_slice(payout_address)
+           .store_coins(full_price - matchain_fee)
+           .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+
+  send_raw_message(owner_msg.end_cell(), 1);
+
+
+  var marketplace_msg = begin_cell()
+           .store_uint(0x10, 6) ;; nobounce
+           .store_slice(owner_address)
+           .store_coins(matchain_fee)
+           .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+
+  send_raw_message(marketplace_msg.end_cell(), 1);
+}
+
 ;;store data
 () store_data() impure {
   set_data(begin_cell()
@@ -33,6 +66,7 @@ slice get_owner() inline method_id {
     .store_uint(owner_public_key, 256)
     .store_uint(nextGameId, 32)
     .store_dict(games)
+    .store_dict(game_info)
     .end_cell()
   );
 }
@@ -41,7 +75,7 @@ slice get_owner() inline method_id {
 ;; Op codes
 ;; 0 -
 
-() recv_internal(int msg_value, cell in_msg_body_cell, slice in_msg_body) impure {
+() recv_internal(int mybalance, int msg_value, cell in_msg_body_cell, slice in_msg_body) impure {
   var cs = in_msg_body_cell.begin_parse();
   var msg_hash = slice_hash(cs);
   cs~skip_bits(3);
@@ -50,11 +84,22 @@ slice get_owner() inline method_id {
   if (bounced == 1) {
     return ();
   }
-  initialize_globals();
+
   ;; Reading user's address
   slice src_addr_slice = cs~load_msg_addr();
   var (src_wc, src_addr) = parse_std_addr(src_addr_slice);
-  var op = in_msg_body~load_in_msg_body_op();
+  var op = in_msg_body~load_uint(32);
+  var game_id = in_msg_body~load_uint(64);
+
+  initialize_globals(game_id);
+    ;; Buy a game
+  if(op == 0){ 
+    buy(mybalance,msg_value,game_id);
+    return ();
+  }
+  ;; Set profile
+  elseif(op== 1){
+  }
 }
 
 ;;external
@@ -72,48 +117,43 @@ slice get_owner() inline method_id {
   var hash = slice_hash(in_msg_body);
   var msg_seq_no = in_msg~load_uint(32);
   var op = in_msg_body~load_uint(32);
-  ;; External public
-  ;; Buy a game
-  if(op == 0){ 
-  }
-  ;; Set profile
-  elseif(op== 1){
-  }
-  else{
-    ;; Function only owner
-    throw_if(403, msg_seq_no != seq_no);
-    throw_unless(402, check_signature(hash, signature, owner_public_key));
-    accept_message(); ;; complete the tx
+  var full_price = in_msg_body~load_coins(0);
 
-    ;; List a game
-    if (op == 2) {
-      ;;obtain sended msg address 
-      var address = in_msg~load_msg_addr(); 
-      ;;store in an unsing dict using gameId as index the address
-      games = games.udict_set(32, nextGameId , address);
-      ;;updates the next gameId
-      nextGameId += 1;
-    }
-        ;; Unlist a game
-    elseif (op == 2) {
-    }
-    ;; Set owner
-    elseif (op == 3) {
-      owner_address = in_msg~load_msg_addr();
-    }
-    elseif (op == 4) {
-    }
-    ;; Self destruct
-    elseif (op == 666) {
-      var (owner_wc, owner_addr) = parse_std_addr(owner_address);
-      send_money(owner_wc, owner_addr, 0, null(), 128 + 32);
-    }
-    elseif (seq_no == 0) {
-      accept_message(); ;; complete the tx
-  } else {
-      throw(404);
+  ;; Function only owner
+  throw_if(403, msg_seq_no != seq_no);
+  throw_unless(402, check_signature(hash, signature, owner_public_key));
+  accept_message(); ;; complete the tx
+  ;; List a game
+  if (op == 2) {
+  ;;obtain sended msg address 
+    var creator_address = in_msg~load_msg_addr(); 
+    ;;create a new cell containing the game info
+    var newGameCell = begin_cell()
+    .store_coins(10)
+    .store_slice(creator_address)
+    .store_coins(full_price)
+    .end_cell();
+    ;;store the address of the creator in a dictionary for each gameId for useful purposes
+    games = games.udict_set(32, nextGameId , creator_address);
+    ;;store the information of the game to do the sale
+    game_info = game_cell.udict_set_ref(32,nextGameId,newGameCell);
+    ;;updates the next gameId
+    nextGameId += 1;
   }
-    seq_no += 1;
-    store_data();
-  } 
+  ;; Set owner
+  elseif (op == 3) {
+    owner_address = in_msg~load_msg_addr();
+  }
+  ;; Self destruct
+  elseif (op == 666) {
+    var (owner_wc, owner_addr) = parse_std_addr(owner_address);
+    send_money(owner_wc, owner_addr, 0, null(), 128 + 32);
+  }
+  elseif (seq_no == 0) {
+    accept_message(); ;; complete the tx
+} else {
+    throw(404);
 }
+  seq_no += 1;
+  store_data();
+  }
