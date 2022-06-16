@@ -136,7 +136,7 @@ slice get_owner() inline method_id {
     ;;store the address of the creator in a dictionary for each gameId for useful purposes
     games = games.udict_set(32, nextGameId , creator_address);
     ;;store the information of the game to do the sale
-    game_info = game_cell.udict_set_ref(32,nextGameId,newGameCell);
+    game_info = game_info.udict_set_ref(32,nextGameId,newGameCell);
     ;;updates the next gameId
     nextGameId += 1;
   }
