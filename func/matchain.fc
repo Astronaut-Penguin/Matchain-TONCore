@@ -40,6 +40,33 @@ slice get_owner() inline method_id {
   return owner_address;
 }
 
+() send_money(int wc, int addr, int amount, builder body, int mode) impure {
+  var message = begin_cell()
+    .store_uint(0, 1) ;; int_msg_info
+      .store_uint(1, 1) ;; ihr_disabled
+      .store_uint(0, 1) ;; bounce
+      .store_uint(0, 1) ;; bounced
+      .store_uint(0, 2) ;; src: addr_none
+      .store_uint(2, 2) ;; dest: addr_std
+        .store_uint(0, 1) ;; anycast
+        .store_uint(wc, 8) ;; workchain_id
+        .store_uint(addr, 256) ;; address
+      .store_grams(amount) ;; grams
+        .store_uint(0, 1) ;; other
+      .store_grams(0) ;; ihr_fee
+      .store_grams(0) ;; fwd_fee
+      .store_uint(cur_lt(), 64) ;; created_lt
+      .store_uint(now(), 32) ;; created_at
+    .store_uint(0, 1) ;; init
+    .store_uint(0, 1); ;; body
+  ifnot (null?(body)) {
+    message = message.store_builder(body);
+  } else {
+    message = message.store_uint(0, 32);
+  }
+  send_raw_message(message.end_cell(), null?(mode) ? 2 : mode); ;; ignore errors
+}
+
 () buy(int my_balance, int msg_value, int game_id) impure {
   var (matchain_fee, payout_address, full_price) = load_gameCell(game_cell);
   throw_unless(450, msg_value >= full_price + min_gas_amount());
