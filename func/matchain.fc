@@ -4,6 +4,10 @@ global slice owner_address;
 global int owner_public_key;
 global int loaded;
 global int nextGameId;
+global cell games;
+global cell game_info;
+global cell game_cell;
+
 
 ;;loads the stored data to global variables
 () initialize_globals( int game_id) impure inline_ref {
@@ -135,7 +139,7 @@ slice get_owner() inline method_id {
     .end_cell();
     ;;store the address of the creator in a dictionary for each gameId for useful purposes
     games = games.udict_set(32, nextGameId , creator_address);
-    ;;store the information of the game to do the sale
+    ;;store the information of the game to do the sale in a udict of cells using gameId as index
     game_info = game_info.udict_set_ref(32,nextGameId,newGameCell);
     ;;updates the next gameId
     nextGameId += 1;
