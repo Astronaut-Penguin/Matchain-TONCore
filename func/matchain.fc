@@ -1,5 +1,4 @@
 ;;global variables
-
 global slice owner_address;
 global int owner_public_key;
 global int nextGameId;
@@ -136,8 +135,8 @@ slice get_owner() inline method_id {
 ;;external
 ;; Op codes
 ;; Op 1 - List a game
-;; Op 2 - Set owner game
-;; Op 3 - Unlist a game
+;; Op 3 - Set owner
+;; Op 666 - Self destruct
 ;; Return codes
 ;; 402 - Invalid signature
 ;; 404 - Unsupported opcode
@@ -155,7 +154,7 @@ slice get_owner() inline method_id {
   throw_unless(402, check_signature(hash, signature, owner_public_key));
   accept_message(); ;; complete the tx
   ;; List a game
-  if (op == 2) {
+  if (op == 1) {
   ;;obtain sended msg address 
     var creator_address = in_msg~load_msg_addr(); 
     ;;create a new cell containing the game info
