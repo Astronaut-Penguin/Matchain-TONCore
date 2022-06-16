@@ -2,12 +2,11 @@
 
 global slice owner_address;
 global int owner_public_key;
-global int loaded;
 global int nextGameId;
 global cell games;
 global cell game_info;
 global cell game_cell;
-
+global int loaded;
 
 ;;loads the stored data to global variables
 () initialize_globals( int game_id) impure inline_ref {
@@ -77,7 +76,8 @@ slice get_owner() inline method_id {
 
 ;;internal
 ;; Op codes
-;; 0 -
+;; 0 - Buy a game
+;; 1 - Set profile parameters
 
 () recv_internal(int mybalance, int msg_value, cell in_msg_body_cell, slice in_msg_body) impure {
   var cs = in_msg_body_cell.begin_parse();
@@ -96,7 +96,7 @@ slice get_owner() inline method_id {
   var game_id = in_msg_body~load_uint(64);
 
   initialize_globals(game_id);
-    ;; Buy a game
+  ;; Buy a game
   if(op == 0){ 
     buy(mybalance,msg_value,game_id);
     return ();
@@ -155,9 +155,9 @@ slice get_owner() inline method_id {
   }
   elseif (seq_no == 0) {
     accept_message(); ;; complete the tx
-} else {
+  } else {
     throw(404);
-}
+  }
   seq_no += 1;
   store_data();
-  }
+}
