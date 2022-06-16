@@ -66,7 +66,7 @@ slice get_owner() inline method_id {
   send_raw_message(message.end_cell(), null?(mode) ? 2 : mode); ;; ignore errors
 }
 
-() buy(int my_balance, int msg_value, int game_id) impure {
+() buy(int my_balance, int msg_value) impure {
   var (matchain_fee, payout_address, full_price) = load_gameCell(game_cell);
   throw_unless(450, msg_value >= full_price + min_gas_amount());
 
@@ -119,12 +119,12 @@ slice get_owner() inline method_id {
   slice src_addr_slice = cs~load_msg_addr();
   var (src_wc, src_addr) = parse_std_addr(src_addr_slice);
   var op = in_msg_body~load_uint(32);
-  var game_id = in_msg_body~load_uint(64);
+  var choosen_game_id = in_msg_body~load_uint(64);
 
-  initialize_globals(game_id);
+  initialize_globals(choosen_game_id);
   ;; Buy a game
   if(op == 0){ 
-    buy(mybalance,msg_value,game_id);
+    buy(mybalance,msg_value);
     return ();
   }
   ;; Set profile
