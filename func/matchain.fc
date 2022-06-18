@@ -6,6 +6,7 @@ global cell games;
 global cell game_info;
 global cell game_cell;
 global int loaded;
+global int seq_no;
 
 ;;loads the stored data to global variables
 () initialize_globals( int game_id) impure inline_ref {
@@ -20,6 +21,7 @@ global int loaded;
   games = slice_empty?(ds) ? new_dict() : ds~load_dict();
   game_info = slice_empty?(ds) ? new_dict() : ds~load_dict();
   game_cell = slice_empty(game_info) ? new_dict() : game_info~load_ref(game_id);
+  seq_no = ds~load_uint(32);
   loaded = true;
 }
 
@@ -47,11 +49,11 @@ slice get_owner() inline method_id {
       .store_uint(0, 1) ;; bounced
       .store_uint(0, 2) ;; src: addr_none
       .store_uint(2, 2) ;; dest: addr_std
-        .store_uint(0, 1) ;; anycast
-        .store_uint(wc, 8) ;; workchain_id
-        .store_uint(addr, 256) ;; address
+      .store_uint(0, 1) ;; anycast
+      .store_uint(wc, 8) ;; workchain_id
+      .store_uint(addr, 256) ;; address
       .store_grams(amount) ;; grams
-        .store_uint(0, 1) ;; other
+      .store_uint(0, 1) ;; other
       .store_grams(0) ;; ihr_fee
       .store_grams(0) ;; fwd_fee
       .store_uint(cur_lt(), 64) ;; created_lt
@@ -66,10 +68,12 @@ slice get_owner() inline method_id {
   send_raw_message(message.end_cell(), null?(mode) ? 2 : mode); ;; ignore errors
 }
 
-() buy(int my_balance, int msg_value) impure {
+() buy(int msg_value) impure {
   var (matchain_fee, payout_address, full_price) = load_gameCell(game_cell);
   throw_unless(450, msg_value >= full_price + min_gas_amount());
 
+  ;;here must be the logic to register the payment and stop the user if try to re-buy the same game
+  ;;later may be created a method to get all the games that the user bought, or to check if a game was bought
   var owner_msg = begin_cell()
            .store_uint(0x10, 6) ;; nobounce
            .store_slice(payout_address)
@@ -96,6 +100,7 @@ slice get_owner() inline method_id {
     .store_uint(nextGameId, 32)
     .store_dict(games)
     .store_dict(game_info)
+    .store_uint(seq_no,32)
     .end_cell()
   );
 }
@@ -105,7 +110,7 @@ slice get_owner() inline method_id {
 ;; 0 - Buy a game
 ;; 1 - Set profile parameters
 
-() recv_internal(int mybalance, int msg_value, cell in_msg_body_cell, slice in_msg_body) impure {
+() recv_internal(int msg_value, cell in_msg_body_cell, slice in_msg_body) impure {
   var cs = in_msg_body_cell.begin_parse();
   var msg_hash = slice_hash(cs);
   cs~skip_bits(3);
@@ -124,7 +129,7 @@ slice get_owner() inline method_id {
   initialize_globals(choosen_game_id);
   ;; Buy a game
   if(op == 0){ 
-    buy(mybalance,msg_value);
+    buy(msg_value);
     return ();
   }
   ;; Set profile
